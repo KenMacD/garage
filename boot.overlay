@@ -1,0 +1,14 @@
+#include <../boards/arm/particle_xenon/dts/mesh_feather.dtsi>
+
+&zephyr_udc0 {
+	cdc_acm_uart0 {
+		compatible = "zephyr,cdc-acm-uart";
+	};
+};
+
+/ {
+	aliases {
+		mcuboot-led0 = &status_red;
+		mcuboot-button0 = &mode_button;
+	};
+};
