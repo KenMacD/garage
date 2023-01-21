@@ -1,0 +1,54 @@
+
+
+#include <../boards/arm/particle_xenon/dts/mesh_feather.dtsi>
+
+/ {
+        aliases {
+                adcctl = &adc;
+        };
+        chosen {
+                /*
+                zephyr,console = &cdc_acm_uart0;
+                zephyr,shell-uart = &cdc_acm_uart0;
+                 */
+                zephyr,entropy = &rng;
+        };
+
+        // https: //docs.particle.io/assets/images/xenon/xenon-pinout-v1.0.pdf
+        zephyr,user {
+                io-channels = <&adc 0>;
+
+                //vibration-gpios = <&mesh_header 7 GPIO_ACTIVE_LOW>;
+                //ctrl-signal-gpios = <&mesh_header 19 GPIO_ACTIVE_LOW>;
+
+                close-limit-gpios = <&mesh_header 15 GPIO_ACTIVE_LOW>; // A4
+                open-limit-gpios = <&mesh_header 14 GPIO_ACTIVE_LOW>; // A5
+
+                open-cmd-gpios = <&mesh_header 4 GPIO_ACTIVE_HIGH>;
+                lock-switch-gpios = <&mesh_header 5 GPIO_ACTIVE_HIGH>;
+                lights-cmd-gpios = <&mesh_header 6 GPIO_ACTIVE_HIGH>;
+        };
+};
+
+&zephyr_udc0 {
+        cdc_acm_uart0: cdc_acm_uart0 {
+                compatible = "zephyr,cdc-acm-uart";
+                label = "CDC_ACM_0";
+        };
+};
+
+&adc {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        status = "okay";
+
+        channel@0 {
+                reg = <0>;
+                zephyr,gain = "ADC_GAIN_1_6";
+                zephyr,reference = "ADC_REF_INTERNAL";
+                zephyr,acquisition-time = <ADC_ACQ_TIME_DEFAULT>;
+                zephyr,input-positive = <NRF_SAADC_AIN1>; /* A0 - 19 - P0.03 */
+        };
+};
+
