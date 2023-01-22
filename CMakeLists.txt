@@ -13,6 +13,8 @@ target_compile_options(app PRIVATE -Wall -Werror -Wextra -Wno-unused-parameter -
 
 target_sources(app PRIVATE
 	src/main.c
+
+	src/coap_server.c
 	src/srp-init.c
 	src/switch.c
 )

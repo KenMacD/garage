@@ -8,6 +8,7 @@
 #include <hal/nrf_saadc.h>
 
 #include "switch.h"
+#include "coap_server.h"
 
 LOG_MODULE_REGISTER(main, LOG_LEVEL_DBG);
 
@@ -86,6 +87,8 @@ void main(void)
 
 	setup_pins();
 	usb_enable(NULL);
+
+	coap_main();
 
 	while (1)
 	{
