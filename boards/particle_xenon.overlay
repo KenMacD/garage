@@ -9,8 +9,8 @@
         chosen {
                 /*
                 zephyr,console = &cdc_acm_uart0;
-                zephyr,shell-uart = &cdc_acm_uart0;
                  */
+                zephyr,shell-uart = &cdc_acm_uart0;
                 zephyr,entropy = &rng;
         };
 
@@ -51,4 +51,3 @@
                 zephyr,input-positive = <NRF_SAADC_AIN1>; /* A0 - 19 - P0.03 */
         };
 };
-

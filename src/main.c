@@ -3,6 +3,7 @@
 
 #include <zephyr/drivers/adc.h>
 #include <zephyr/drivers/gpio.h>
+#include <zephyr/usb/usb_device.h>
 
 #include <hal/nrf_saadc.h>
 
@@ -84,6 +85,7 @@ void main(void)
 	}
 
 	setup_pins();
+	usb_enable(NULL);
 
 	while (1)
 	{
