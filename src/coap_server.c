@@ -12,6 +12,10 @@ LOG_MODULE_REGISTER(net_coap_server, LOG_LEVEL_DBG);
 #include <zephyr/net/udp.h>
 #include <zephyr/net/coap.h>
 #include <zephyr/net/coap_link_format.h>
+#include <zephyr/net/net_conn_mgr.h>
+#include <zephyr/net/openthread.h>
+
+#include <openthread/thread.h>
 
 #define MAX_RETRANSMIT_COUNT 2
 
@@ -25,6 +29,13 @@ LOG_MODULE_REGISTER(net_coap_server, LOG_LEVEL_DBG);
 	(((struct sockaddr *)sock)->sa_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6))
 
 #define NUM_PENDINGS 10
+
+#define EVENT_MASK (NET_EVENT_L4_CONNECTED | NET_EVENT_L4_DISCONNECTED)
+K_SEM_DEFINE(connected, 0, 1);
+static struct net_mgmt_event_callback mgmt_cb;
+
+static void coap_server_process(void *a1, void *a2, void *a3);
+K_THREAD_DEFINE(coap_server_id, 4096, coap_server_process, NULL, NULL, NULL, 7, 0, 0);
 
 /* CoAP socket fd */
 static int sock;
@@ -262,11 +273,41 @@ static int process_client_request(void)
 	return 0;
 }
 
-void coap_main(void)
+static void event_handler(struct net_mgmt_event_callback *cb,
+						  uint32_t mgmt_event, struct net_if *iface)
+{
+	if ((mgmt_event & EVENT_MASK) != mgmt_event)
+	{
+		return;
+	}
+
+	if (mgmt_event == NET_EVENT_L4_CONNECTED)
+	{
+		LOG_INF("Network connected");
+		k_sem_give(&connected);
+
+		return;
+	}
+}
+
+void coap_server_process(void *a, void *b, void *c)
 {
 	int r;
 
-	LOG_DBG("Start CoAP-server sample");
+	if (IS_ENABLED(CONFIG_NET_CONNECTION_MANAGER))
+	{
+		net_mgmt_init_event_callback(&mgmt_cb,
+									 event_handler, EVENT_MASK);
+		net_mgmt_add_event_callback(&mgmt_cb);
+		net_conn_mgr_resend_status();
+		k_sem_take(&connected, K_FOREVER);
+	}
+	else
+	{
+		k_sleep(K_SECONDS(10U));
+	}
+
+	LOG_DBG("Start CoAP-server");
 
 	r = start_coap_server();
 	if (r < 0)

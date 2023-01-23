@@ -88,8 +88,6 @@ void main(void)
 	setup_pins();
 	usb_enable(NULL);
 
-	coap_main();
-
 	while (1)
 	{
 		ret = gpio_pin_toggle_dt(&led);
