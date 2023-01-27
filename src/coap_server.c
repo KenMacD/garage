@@ -23,6 +23,25 @@ LOG_MODULE_REGISTER(net_coap_server, LOG_LEVEL_DBG);
 
 #define MY_COAP_PORT 5683
 
+#define MAX_RESOURCES 10
+static int num_resources = 1;
+static int well_known_core_get(struct coap_resource *,
+							   struct coap_packet *,
+							   struct sockaddr *, socklen_t);
+
+static int bool_get(struct coap_resource *,
+					struct coap_packet *,
+					struct sockaddr *, socklen_t);
+
+// NB: resources is not currently threadsafe
+static struct coap_resource resources[MAX_RESOURCES + 1] = {
+	{
+		.get = well_known_core_get,
+		.path = COAP_WELL_KNOWN_CORE_PATH,
+	},
+	{0},
+};
+
 #define BLOCK_WISE_TRANSFER_SIZE_GET 2048
 
 #define ADDRLEN(sock) \
@@ -113,9 +132,9 @@ end:
 	return r;
 }
 
-static int piggyback_get(struct coap_resource *resource,
-						 struct coap_packet *request,
-						 struct sockaddr *addr, socklen_t addr_len)
+static int bool_get(struct coap_resource *resource,
+					struct coap_packet *request,
+					struct sockaddr *addr, socklen_t addr_len)
 {
 	struct coap_packet response;
 	uint8_t payload[40];
@@ -189,20 +208,26 @@ end:
 	return r;
 }
 
-static const char *const test_path[] = {"test", NULL};
+void coap_add_bool_resource(char *name, bool *value)
+{
 
-static struct coap_resource resources[] = {
+	if (num_resources >= MAX_RESOURCES)
 	{
-		.get = well_known_core_get,
-		.path = COAP_WELL_KNOWN_CORE_PATH,
-	},
-	{
-		.get = piggyback_get,
-		.path = test_path,
-	},
+		LOG_ERR("%s", "Resource limit hit, can not add another");
+	}
+	memset(&resources[num_resources], 0, sizeof(*resources));
+	memset(&resources[num_resources + 1], 0, sizeof(*resources));
 
-	{},
-};
+	char **path = calloc(2, sizeof(char *));
+	path[0] = name;
+
+	struct coap_resource *resource = &resources[num_resources];
+	resource->get = bool_get;
+	resource->user_data = value;
+	// Set path last, as it's used to check if the entry exists
+	resource->path = (const char *const *)path;
+	num_resources += 1;
+}
 
 static void process_coap_request(uint8_t *data, uint16_t data_len,
 								 struct sockaddr *client_addr,
