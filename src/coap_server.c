@@ -132,9 +132,11 @@ end:
 	return r;
 }
 
-static int bool_get(struct coap_resource *resource,
-					struct coap_packet *request,
-					struct sockaddr *addr, socklen_t addr_len)
+static int send_reply(int value,
+					  struct coap_resource *resource,
+					  struct coap_packet *request,
+					  struct sockaddr *addr,
+					  socklen_t addr_len)
 {
 	struct coap_packet response;
 	uint8_t payload[40];
@@ -185,9 +187,7 @@ static int bool_get(struct coap_resource *resource,
 		goto end;
 	}
 
-	/* The response that coap-client expects */
-	r = snprintk((char *)payload, sizeof(payload),
-				 "%d", *(bool *)(resource->user_data) ? 1 : 0);
+	r = snprintk((char *)payload, sizeof(payload), "%d", value);
 	if (r < 0)
 	{
 		goto end;
@@ -208,6 +208,15 @@ end:
 	return r;
 }
 
+static int bool_get(struct coap_resource *resource,
+					struct coap_packet *request,
+					struct sockaddr *addr,
+					socklen_t addr_len)
+{
+	int value = *(bool *)(((struct coap_core_metadata *)resource->user_data)->user_data) ? 1 : 0;
+	return send_reply(value, resource, request, addr, addr_len);
+}
+
 void coap_add_bool_resource(char *name, bool *value)
 {
 
@@ -218,12 +227,15 @@ void coap_add_bool_resource(char *name, bool *value)
 	memset(&resources[num_resources], 0, sizeof(*resources));
 	memset(&resources[num_resources + 1], 0, sizeof(*resources));
 
+	struct coap_core_metadata *meta = calloc(1, sizeof(struct coap_core_metadata));
+	meta->user_data = value;
+
 	char **path = calloc(2, sizeof(char *));
 	path[0] = name;
 
 	struct coap_resource *resource = &resources[num_resources];
 	resource->get = bool_get;
-	resource->user_data = value;
+	resource->user_data = meta;
 	// Set path last, as it's used to check if the entry exists
 	resource->path = (const char *const *)path;
 	num_resources += 1;
