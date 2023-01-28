@@ -17,6 +17,8 @@ LOG_MODULE_REGISTER(net_coap_server, LOG_LEVEL_DBG);
 
 #include <openthread/thread.h>
 
+#include "coap_server.h"
+
 #define MAX_RETRANSMIT_COUNT 2
 
 #define MAX_COAP_MSG_LEN 256
@@ -241,6 +243,43 @@ void coap_add_bool_resource(char *name, bool *value)
 	num_resources += 1;
 }
 
+static int schedule_button(struct coap_resource *resource,
+						   struct coap_packet *request,
+						   struct sockaddr *addr, socklen_t addr_len)
+{
+
+	struct button_work *button = ((struct coap_core_metadata *)resource->user_data)->user_data;
+	k_work_submit(&button->click_work);
+
+	return send_reply(1, resource, request, addr, addr_len);
+}
+
+void coap_add_button(char *name, struct button_work *button)
+{
+
+	if (num_resources >= MAX_RESOURCES)
+	{
+		LOG_ERR("%s", "Resource limit hit, can not add another");
+	}
+	memset(&resources[num_resources], 0, sizeof(*resources));
+	memset(&resources[num_resources + 1], 0, sizeof(*resources));
+
+	struct coap_core_metadata *meta = calloc(1, sizeof(struct coap_core_metadata));
+	meta->user_data = button;
+
+	static const char *button_path = "button";
+	char **path = calloc(3, sizeof(char *));
+	path[0] = (char *)button_path;
+	path[1] = name;
+
+	struct coap_resource *resource = &resources[num_resources];
+	resource->post = schedule_button;
+	resource->user_data = meta;
+	// Set path last, as it's used to check if the entry exists
+	resource->path = (const char *const *)path;
+	num_resources += 1;
+}
+
 static void process_coap_request(uint8_t *data, uint16_t data_len,
 								 struct sockaddr *client_addr,
 								 socklen_t client_addr_len)
@@ -337,7 +376,7 @@ void coap_server_process(void *a, void *b, void *c)
 									 event_handler, EVENT_MASK);
 		net_mgmt_add_event_callback(&mgmt_cb);
 		net_conn_mgr_resend_status();
-		k_sem_take(&connected, K_FOREVER);
+		k_sem_take(&connected, K_SECONDS(10U));
 	}
 	else
 	{

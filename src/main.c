@@ -7,6 +7,7 @@
 
 #include <hal/nrf_saadc.h>
 
+#include "button.h"
 #include "switch.h"
 #include "coap_server.h"
 
@@ -34,11 +35,24 @@ static K_SEM_DEFINE(connected, 0, 1);
 
 #define ZEPHYR_USER_NODE DT_PATH(zephyr_user)
 #define ZEPHYR_GPIO(N) const struct gpio_dt_spec N = GPIO_DT_SPEC_GET(ZEPHYR_USER_NODE, N##_gpios)
-ZEPHYR_GPIO(open_cmd);
+
 ZEPHYR_GPIO(lock_switch);
-ZEPHYR_GPIO(lights_cmd);
 SWITCH(open_limit);
 SWITCH(close_limit);
+
+struct button_work open_button =
+	{
+		.click_work = Z_WORK_INITIALIZER(press_button),
+		.release_work = Z_WORK_DELAYABLE_INITIALIZER(release_button),
+		.gpio = GPIO_DT_SPEC_GET(ZEPHYR_USER_NODE, open_cmd_gpios),
+};
+
+struct button_work lights_button =
+	{
+		.click_work = Z_WORK_INITIALIZER(press_button),
+		.release_work = Z_WORK_DELAYABLE_INITIALIZER(release_button),
+		.gpio = GPIO_DT_SPEC_GET(ZEPHYR_USER_NODE, lights_cmd_gpios),
+};
 
 #if 0
 static const struct adc_dt_spec ctrl_signal = ADC_DT_SPEC_GET_BY_IDX(ZEPHYR_USER_NODE, 0);
@@ -55,9 +69,9 @@ static void switch_event_handler(enum switch_evt evt, char *name)
 
 void setup_pins()
 {
-	gpio_pin_configure_dt(&open_cmd, GPIO_OUTPUT_INACTIVE);
+	gpio_pin_configure_dt(&open_button.gpio, GPIO_OUTPUT_INACTIVE);
 	gpio_pin_configure_dt(&lock_switch, GPIO_OUTPUT_INACTIVE);
-	gpio_pin_configure_dt(&lights_cmd, GPIO_OUTPUT_INACTIVE);
+	gpio_pin_configure_dt(&lights_button.gpio, GPIO_OUTPUT_INACTIVE);
 
 	gpio_pin_configure_dt(&led, GPIO_OUTPUT_ACTIVE);
 
@@ -76,10 +90,10 @@ void main(void)
 
 	if (!(
 			device_is_ready(led.port) &&
-			device_is_ready(open_cmd.port) &&
+			device_is_ready(open_button.gpio.port) &&
 			device_is_ready(lock_switch.port) &&
-			device_is_ready(lights_cmd.port))) // &&
-											   // device_is_ready(ctrl_signal.dev)))
+			device_is_ready(lights_button.gpio.port))) // &&
+													   // device_is_ready(ctrl_signal.dev)))
 	{
 		LOG_ERR("%s", "GPIO not ready.\n");
 		return;
@@ -90,6 +104,9 @@ void main(void)
 
 	coap_add_bool_resource("open", &open_limit.active);
 	coap_add_bool_resource("close", &close_limit.active);
+
+	coap_add_button("open", &open_button);
+	coap_add_button("lights", &lights_button);
 
 	while (1)
 	{
