@@ -109,7 +109,6 @@ void main(void)
 	}
 
 	setup_pins();
-	usb_enable(NULL);
 
 	coap_add_bool_resource("open", &open_limit.active);
 	coap_add_bool_resource("close", &close_limit.active);
