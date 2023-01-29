@@ -2,9 +2,10 @@
 LOG_MODULE_REGISTER(net_coap_server, LOG_LEVEL_DBG);
 
 #include <errno.h>
+#include <zephyr/kernel.h>
+#include <zephyr/drivers/adc.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/sys/byteorder.h>
-#include <zephyr/kernel.h>
 
 #include <zephyr/net/socket.h>
 #include <zephyr/net/net_mgmt.h>
@@ -274,6 +275,63 @@ void coap_add_button(char *name, struct button_work *button)
 
 	struct coap_resource *resource = &resources[num_resources];
 	resource->post = schedule_button;
+	resource->user_data = meta;
+	// Set path last, as it's used to check if the entry exists
+	resource->path = (const char *const *)path;
+	num_resources += 1;
+}
+
+static int read_adc(struct coap_resource *resource,
+					struct coap_packet *request,
+					struct sockaddr *addr, socklen_t addr_len)
+{
+	int ret;
+	const struct adc_dt_spec *adc_chan = ((struct coap_core_metadata *)resource->user_data)->user_data;
+
+	int16_t buf;
+	struct adc_sequence sequence = {
+		.buffer = &buf,
+		/* buffer size in bytes, not number of samples */
+		.buffer_size = sizeof(buf),
+	};
+
+	(void)adc_sequence_init_dt(adc_chan, &sequence);
+
+	if (sequence.resolution == 0)
+	{
+		LOG_WRN("Adc requires a resolution to be set");
+		return -1;
+	}
+
+	ret = adc_read(adc_chan->dev, &sequence);
+	if (ret < 0)
+	{
+		LOG_ERR("error reading adc: %d\n", ret);
+	}
+
+	return send_reply(buf, resource, request, addr, addr_len);
+}
+
+void coap_add_adc(char *name, struct adc_dt_spec const *adc_chan)
+{
+
+	if (num_resources >= MAX_RESOURCES)
+	{
+		LOG_ERR("%s", "Resource limit hit, can not add another");
+	}
+	memset(&resources[num_resources], 0, sizeof(*resources));
+	memset(&resources[num_resources + 1], 0, sizeof(*resources));
+
+	struct coap_core_metadata *meta = calloc(1, sizeof(struct coap_core_metadata));
+	meta->user_data = (void *)adc_chan;
+
+	static const char *button_path = "adc";
+	char **path = calloc(3, sizeof(char *));
+	path[0] = (char *)button_path;
+	path[1] = name;
+
+	struct coap_resource *resource = &resources[num_resources];
+	resource->get = read_adc;
 	resource->user_data = meta;
 	// Set path last, as it's used to check if the entry exists
 	resource->path = (const char *const *)path;

@@ -40,6 +40,14 @@ ZEPHYR_GPIO(lock_switch);
 SWITCH(open_limit);
 SWITCH(close_limit);
 
+#if !DT_NODE_EXISTS(DT_PATH(zephyr_user)) || \
+	!DT_NODE_HAS_PROP(DT_PATH(zephyr_user), io_channels)
+#error "No suitable devicetree overlay specified"
+#endif
+
+static const struct adc_dt_spec ctrl_signal =
+	ADC_DT_SPEC_GET_BY_IDX(DT_PATH(zephyr_user), 0);
+
 struct button_work open_button =
 	{
 		.click_work = Z_WORK_INITIALIZER(press_button),
@@ -53,10 +61,6 @@ struct button_work lights_button =
 		.release_work = Z_WORK_DELAYABLE_INITIALIZER(release_button),
 		.gpio = GPIO_DT_SPEC_GET(ZEPHYR_USER_NODE, lights_cmd_gpios),
 };
-
-#if 0
-static const struct adc_dt_spec ctrl_signal = ADC_DT_SPEC_GET_BY_IDX(ZEPHYR_USER_NODE, 0);
-#endif
 
 #define SLEEP_TIME_MS 1000
 #define LED0_NODE DT_ALIAS(led0)
@@ -78,7 +82,12 @@ void setup_pins()
 	switch_init(&open_limit, switch_event_handler);
 	switch_init(&close_limit, switch_event_handler);
 
-	// adc_channel_setup_dt(&ctrl_signal);
+	int err;
+	err = adc_channel_setup_dt(&ctrl_signal);
+	if (err < 0)
+	{
+		LOG_ERR("Could not setup adc channel (%d)\n", err);
+	}
 }
 
 void main(void)
@@ -92,8 +101,8 @@ void main(void)
 			device_is_ready(led.port) &&
 			device_is_ready(open_button.gpio.port) &&
 			device_is_ready(lock_switch.port) &&
-			device_is_ready(lights_button.gpio.port))) // &&
-													   // device_is_ready(ctrl_signal.dev)))
+			device_is_ready(lights_button.gpio.port) &&
+			device_is_ready(ctrl_signal.dev)))
 	{
 		LOG_ERR("%s", "GPIO not ready.\n");
 		return;
@@ -108,12 +117,15 @@ void main(void)
 	coap_add_button("open", &open_button);
 	coap_add_button("lights", &lights_button);
 
+	coap_add_adc("control", &ctrl_signal);
+
 	while (1)
 	{
 		ret = gpio_pin_toggle_dt(&led);
 		if (ret < 0)
 		{
-			return;
+			LOG_ERR("Unable to toggle LED");
+			continue;
 		}
 		k_msleep(SLEEP_TIME_MS);
 	}
